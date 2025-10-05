@@ -279,6 +279,8 @@ class gas:
 
         
         # #### define sound speed if turbulence or keplerian deviation needed (IT NEEDS TO KNOW THE SOUND SPEED)
+        # WARNING: THIS WILL NOT WORK IF EMISPHERES ARE NOT MIRRORED
+        if not grid.mirror: sys.exit('reading gas temperature when emispheres are not mirrored is not implemented yet') 
         if turbulence or pressure_support: # speed in cm/s
 
             ### load gas temperature
