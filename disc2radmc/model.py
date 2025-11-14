@@ -723,13 +723,13 @@ class dust:
 
 
     ## dust density from X,Y,Z positions (same density for all species in current implementation)
-    def dust_densities_Nbody(self, grid=None, positions=[], fmt='XYZ'):
+    def dust_densities_Nbody(self, grid=None, positions=None, fmt='XYZ'):
 
         # positions: [au or rad],  array with position of particles with shape (Nparticles, Ndim) 
         
         
         assert grid is not None, "grid object needed to define dust density distribution"
-        assert positions!=[], "empty array with positions"
+        assert positions is not None, "array with positions not specified"
 
         self.grid=grid
         self.rho_d=np.zeros((self.N_species,self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # density field (only norther emisphere)
