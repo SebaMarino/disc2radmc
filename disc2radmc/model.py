@@ -183,8 +183,14 @@ class gas:
         
         if turbulence:
             assert alpha_turb is not None, "alpha needs to be defined to set the turbulence" 
+            assert alpha_turb>=0., "alpha needs to be positive" 
+
             self.alpha_turb=alpha_turb
-            
+        else:
+            # remove file if it exists
+            if os.path.exists('microturbulence.inp'):
+                os.remove('microturbulence.inp')    
+
         self.grid=grid
         self.gas_species=gas_species
         self.N_species=len(self.gas_species)
@@ -225,42 +231,42 @@ class gas:
         ### define the density field
         #################################################################
 
-        self.rho_g=np.zeros((self.N_species,self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # density field (only norther emisphere)
+        self.dens_g=np.zeros((self.N_species,self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # density field (only norther emisphere)
 
        
         # define density
-    
-        for ia in range(self.N_species):
-            M_gas_temp= 0.0
         
-            if self.grid.Nth>1: # more than one cell per emisphere
-                self.rho_g[ia,:,:,:]=self.rho_3d_dens(self.grid.rhom, self.grid.phim, self.grid.zm, h, r0, gamma, self.functions_rhoz[ia], functions_sigma[ia], *pars_sigma[ia])
+        if functions_sigma is not None:
+            assert len(functions_sigma)==self.N_species, "functions_sigma should be an array of function with a length equal to the number of species"
 
-                # # now south emisphere is copy of nother emisphere
-                # rho_d[ia,Nth-1:,:,:]=rho_d[ia,-Nth::-1,:,:]
-                ### the line above works because this is how step and slicing work https://stackoverflow.com/questions/509211/understanding-slice-notation
-                # a[::-1]    # all items in the array, reversed
-                # a[1::-1]   # the first two items, reversed
-                # a[:-3:-1]  # the last two items, reversed
-                # a[-3::-1]  # everything except the last two items, reversed
+            for ia in range(self.N_species):
+                M_gas_temp= 0.0
             
-            elif self.grid.Nth==1:# one cell
+                if self.grid.Nth>1: # more than one cell per emisphere
+                    self.dens_g[ia,:,:,:]=self.rho_3d_dens(self.grid.rhom, self.grid.phim, self.grid.zm, h, r0, gamma, self.functions_rhoz[ia], functions_sigma[ia], *pars_sigma[ia])
 
-                self.rho_g[ia,:,:,:]=functions_sigma[ia](self.grid.rhom, self.grid.phim, *pars_sigma[ia])/(self.grid.dth[0]*self.grid.rhom) # rho_3d_dens(rho, 0.0, 0.0, hs, sigmaf, *args )
-                # rho_d[ia,1,:,:]=rho_d[ia,0,:,:]
-        
-            M_gas_temp=2.*np.sum(self.rho_g[ia,:,:,:]*(self.grid.dphim*self.grid.rhom)*(self.grid.drm)*(self.grid.dthm*self.grid.rm))*au**3.0
-            self.rho_g[ia,:,:,:]=self.rho_g[ia,:,:,:]*self.Masses[ia]/M_gas_temp*M_earth /self.masses[ia] # 1/cm3
+                
+                elif self.grid.Nth==1:# one cell
 
+                    self.dens_g[ia,:,:,:]=functions_sigma[ia](self.grid.rhom, self.grid.phim, *pars_sigma[ia])/(self.grid.dth[0]*self.grid.rhom) # rho_3d_dens(rho, 0.0, 0.0, hs, sigmaf, *args )
+            
+                M_gas_temp=2.*np.sum(self.dens_g[ia,:,:,:]*(self.grid.dphim*self.grid.rhom)*(self.grid.drm)*(self.grid.dthm*self.grid.rm))*au**3.0
+                self.dens_g[ia,:,:,:]=self.dens_g[ia,:,:,:]*self.Masses[ia]/M_gas_temp*M_earth /self.masses[ia] # 1/cm3
+
+        else:
+            print('No surface density function provided. Gas density set to zero.')
         #################################################################
         ##### define velocity field
         #################################################################
+        if grid.mirror:
+            self.vel=np.zeros((3,self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # gas velocity field (only norther emisphere)
+        else:
+            self.vel=np.zeros((3,2*self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # gas velocity field (only norther emisphere)
 
-        self.vel=np.zeros((3,self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # gas velocity field (only norther emisphere)
 
         self.vel[0,:,:,:] = vr # vr, cm/s
         self.vel[1,:,:,:] = 0.0 # vtheta, cm/s
-        self.vel[2,:,:,:] = np.sqrt(   G * star.Mstar*M_sun * self.grid.rhom**2/(self.grid.rm**3)/au    )  # vphi , cm/s
+        self.vel[2,:,:,:] = np.sqrt(   G * star.Mstar*M_sun * self.grid.rho_fullm**2/(self.grid.r_fullm**3)/au    )  # vphi , cm/s
         self.vkep=self.vel[2,:,:,:]*1. # store the Keplerian velocity for quick access
 
         #################################################################
@@ -282,49 +288,72 @@ class gas:
         
         if turbulence or pressure_support: # speed in cm/s
 
-            # WARNING: THIS WILL NOT WORK IF EMISPHERES ARE NOT MIRRORED
-            if not grid.mirror: sys.exit('reading gas temperature when emispheres are not mirrored is not implemented yet') 
+            # the lines below that load the gas or dust temperature could be made into a function to avoid code repetition
             
             ### load gas temperature
             if self.gasT:
                 
-                self.Ts=np.loadtxt('./gas_temperature.inp', skiprows=2, max_rows=self.grid.Nphi*self.grid.Nth*self.grid.Nr).reshape( (self.grid.Nphi, self.grid.Nth, self.grid.Nr))
+                if grid.mirror:
+                    self.Ts=np.loadtxt('./gas_temperature.inp', skiprows=2, max_rows=self.grid.Nphi*self.grid.Nth*self.grid.Nr).reshape( (self.grid.Nphi, self.grid.Nth, self.grid.Nr))
                 
+                else:
+                    self.Ts=np.loadtxt('./gas_temperature.inp', skiprows=2, max_rows=self.grid.Nphi*2*self.grid.Nth*self.grid.Nr).reshape( (self.grid.Nphi, 2*self.grid.Nth, self.grid.Nr))
             ### load dust temperature
             else:
                 # if binary file exists
                 try:
-                    self.Ts=np.fromfile('./dust_temperature.bdat', count=self.grid.Nr*self.grid.Nphi*self.grid.Nth+4, dtype=float)[4:].reshape( (self.grid.Nphi, self.grid.Nth, self.grid.Nr))
+                    if grid.mirror:
+                        self.Ts=np.fromfile('./dust_temperature.bdat', count=self.grid.Nr*self.grid.Nphi*self.grid.Nth+4, dtype=float)[4:].reshape( (self.grid.Nphi, self.grid.Nth, self.grid.Nr))
+                    else:
+                        self.Ts=np.fromfile('./dust_temperature.bdat', count=self.grid.Nr*self.grid.Nphi*2*self.grid.Nth+4, dtype=float)[4:].reshape( (self.grid.Nphi, 2*self.grid.Nth, self.grid.Nr))
                 # if not, load normal file
                 except:
-                    self.Ts=np.loadtxt('./dust_temperature.inp', skiprows=3,  max_rows=self.gridmodel.Nphi*self.gridmodel.Nth*self.gridmodel.Nr).reshape( (self.grid.Nphi, self.grid.Nth, self.grid.Nr))
-
-            # need to swap phi and Th axes
+                    if grid.mirror:
+                        self.Ts=np.loadtxt('./dust_temperature.inp', skiprows=3,  max_rows=self.gridmodel.Nphi*self.gridmodel.Nth*self.gridmodel.Nr).reshape( (self.grid.Nphi, self.grid.Nth, self.grid.Nr))
+                    else:
+                        self.Ts=np.loadtxt('./dust_temperature.inp', skiprows=3,  max_rows=self.gridmodel.Nphi*2*self.gridmodel.Nth*self.gridmodel.Nr).reshape( (self.grid.Nphi, 2*self.grid.Nth, self.grid.Nr))
+            
+            # need to swap phi and Th axes to be compatible with dens_g and vel arrays
             self.Ts=np.swapaxes(self.Ts, 0,1)
+
             # need to reverse order of Th axis
-            self.Ts=np.flip(self.Ts, axis=0) 
-                
+            # self.Ts=np.flip(self.Ts, axis=0) 
+            
+            # calculate sound speed
+            # this could be moved to a function
             self.cs=np.sqrt(K*self.Ts/(mu * mp)) # cm/s
 
+            # this could be moved to a function
             if turbulence:
                 self.turbulence=np.sqrt(self.alpha_turb)*self.cs # Nth, Nphi, Nr
 
+        # this could also be moved to a function
         if pressure_support:
 
-            self.P=np.sum(self.rho_g*self.masses, axis=0)*self.cs**2. # cgs
-            ### old version that assume dP/dR=dP/dr (spherical R = cylindrical r)
-            # self.dPdr=np.gradient(self.P, self.grid.r*au, axis=2) # cgs
+            # need to fix this as cs can have both emispheres and is ordered from N pole to midplane, whereas dens_g is only norther emisphere and ordered from midplane to N pole
+            #### insert fix by extending dens_g to both emispheres and reordering theta axis
+            if grid.mirror:
+                self.dens_g_full=np.zeros((self.N_species, self.grid.Nth, self.grid.Nphi, self.grid.Nr)) # density field (only N emisphere)
+                self.dens_g_full[:, : ,:,:]=self.dens_g[:,::-1,:,:] # flipped northern emisphere
+            else:
+                self.dens_g_full=np.zeros((self.N_species, 2*self.grid.Nth, self.grid.Nphi, self.grid.Nr)) # density field (both emispheres)
+                self.dens_g_full[:, :self.grid.Nth ,:,:]=self.dens_g[:,::-1,:,:] # flipped northern emisphere
+                self.dens_g_full[:, self.grid.Nth: ,:,:]=self.dens_g[:, : ,:,:] # southern emisphere
 
-            ### dP/dr = dP/dR * dR/dr + dP/dtheta * dtheta/dr (derived using r,z as a function of R, theta)
-            self.dPdr=np.gradient(self.P, self.grid.r*au, axis=2)*np.cos(self.grid.thetam) - np.gradient(self.P, self.grid.th, axis=0)*np.sin(self.grid.thetam)/(self.grid.rm*au) # cgs
+
+            self.P=np.sum(self.dens_g_full*self.masses, axis=0)*self.cs**2. # cgs
             
-            ac = G*star.Mstar*M_sun*self.grid.rhom*au**(-2)/self.grid.rm**3. 
+            ### dP/dr = dP/dR * dR/dr + dP/dtheta * dtheta/dr (derived using r,z as a function of R, theta)
+            ### need to fix this bit to have correct array with theta values ordered as cs and P
+            self.dPdr=np.gradient(self.P, self.grid.r*au, axis=2)*np.cos(self.grid.theta_fullm) - np.gradient(self.P, self.grid.th_full, axis=0)*np.sin(self.grid.theta_fullm)/(self.grid.r_fullm*au) # cgs
+            
+            ac = G*star.Mstar*M_sun*self.grid.rho_fullm*au**(-2)/self.grid.r_fullm**3. 
             # add pressure deviation
-            ac+= self.dPdr/np.sum(self.rho_g*self.masses, axis=0)
+            ac+= self.dPdr/np.sum(self.dens_g_full*self.masses, axis=0)
             # pressure term can sometimes be larger than Keplerian if gradient is too strong (e.g. exponential drop). Set ac to zero in those cases to avoid negative ac
             ac[ac<0.]=0.
     
-            self.vel[2,:,:,:] = np.sqrt(ac*self.grid.rhom*au) # cm/s
+            self.vel[2,:,:,:] = np.sqrt(ac*self.grid.rho_fullm*au) # cm/s
             
 
     
@@ -357,13 +386,13 @@ class gas:
                 # northern emisphere
                 for k in range(self.grid.Nth):
                     for i in range(self.grid.Nr):
-                        file_gas.write('%1.5e \n'%(self.rho_g[ia,-(1+k),j,i]))
+                        file_gas.write('%1.5e \n'%(self.dens_g[ia,-(1+k),j,i]))
 
                 if not self.grid.mirror:
                     # southern emisphere
                     for k in range(self.grid.Nth):
                         for i in range(self.grid.Nr):
-                            file_gas.write('%1.5e \n'%(self.rho_g[ia,k,j,i]))
+                            file_gas.write('%1.5e \n'%(self.dens_g[ia,k,j,i]))
                 
             file_gas.close()
 
@@ -380,20 +409,20 @@ class gas:
             file_velocity.write(str((self.grid.Nr)*(2*self.grid.Nth)*(self.grid.Nphi))+' \n') # iformat n cells
 
         for j in range(self.grid.Nphi):
-            # northern emisphere
-            for k in range(self.grid.Nth):
+            # northern emisphere (and southern emisphere implicit as turbulence array already has the right theta ordering)
+            for k in range(self.vel.shape[1]):
                 for i in range(self.grid.Nr):
-                    file_velocity.write(str(self.vel[0,-(1+k),j,i])+'\t '+str(self.vel[1,-(1+k),j,i])+'\t '+str(self.vel[2,-(1+k),j,i])+' \n')
-
-            if not self.grid.mirror:
-                # southern emisphere
-                for k in range(self.grid.Nth):
-                    for i in range(self.grid.Nr):
-                        file_velocity.write(str(self.vel[0,k,j,i])+'\t '+str(self.vel[1,k,j,i])+'\t '+str(self.vel[2,k,j,i])+' \n')
+                    file_velocity.write(str(self.vel[0,k,j,i])+'\t '+str(self.vel[1,k,j,i])+'\t '+str(self.vel[2,k,j,i])+' \n')
                 
         file_velocity.close() 
 
     def write_turbulence(self): 
+        # turbulence array already has the right theta ordering
+
+        # exit function if no turbulence
+        if not hasattr(self, 'turbulence'):
+            print('No turbulence to write')
+            return
 
         path='microturbulence.inp'
         file_turbulence=open(path,'w')
@@ -407,15 +436,10 @@ class gas:
             
         for j in range(self.grid.Nphi):
 
-            # northern emisphere
-            for k in range(self.grid.Nth):
+            # northern emisphere (and southern emisphere implicit as turbulence array already has the right theta ordering)
+            for k in range(self.turbulence.shape[0]):
                 for i in range(self.grid.Nr):
-                    file_turbulence.write(str(self.turbulence[-(1+k),j,i])+' \n')
-            if not self.grid.mirror:
-                # southern emisphere
-                for k in range(self.grid.Nth):
-                    for i in range(self.grid.Nr):
-                        file_turbulence.write(str(self.turbulence[k,j,i])+' \n')
+                    file_turbulence.write(str(self.turbulence[k,j,i])+' \n')
                 
         file_turbulence.close() 
         
@@ -690,36 +714,40 @@ class dust:
 
         ## strange cases ntheta=1, mirror, etc
         self.grid=grid
-        self.rho_d=np.zeros((self.N_species,self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # density field (only norther emisphere)
+        self.dens_d=np.zeros((self.N_species,self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # density field (only norther emisphere)
 
         # thetam, phim, rm=np.meshgrid(self.grid.th, self.grid.phi, self.grid.r, indexing='ij' ) # so it goes from Northpole to equator. theta is still the angle from the equator.
         # dthm, dphim, drm = np.meshgrid(self.grid.dth, self.grid.dphi, self.grid.dr, indexing='ij' )
         # rhom=rm*np.cos(thetam) 
         # zm=rm*np.sin(thetam)
 
-        
-        for ia in range(self.N_species):
-            M_dust_temp= 0.0
+        if function_sigma is None:
+            print('No surface density function provided. Dust density set to zero.')
 
-            if size_segregation:
-                # nother emisphere
-                if self.grid.Nth>1: # more than one cell per emisphere
-                    self.rho_d[ia,:,:,:]=self.rho_3d_dens_seg(self.grid.rhom, self.grid.phim, self.grid.zm, h, r0, gamma, self.Agrid[ia], a0, beta, self.functions_rhoz[ia], function_sigma, *par_sigma)
+        else:
 
-                elif self.grid.Nth==1:# one cell
-                    self.rho_d[ia,:,:,:]=function_sigma(self.grid.rhom, self.grid.phim, self.Agrid[ia], *par_sigma)/(self.grid.dth[0]*self.grid.rhom) 
+            for ia in range(self.N_species):
+                M_dust_temp= 0.0
 
-            else:
-                # nother emisphere
-                if self.grid.Nth>1: # more than one cell per emisphere
-                    self.rho_d[ia,:,:,:]=self.rho_3d_dens(self.grid.rhom, self.grid.phim, self.grid.zm, h, r0, gamma, self.functions_rhoz[ia], function_sigma, *par_sigma)
+                if size_segregation:
+                    # nother emisphere
+                    if self.grid.Nth>1: # more than one cell per emisphere
+                        self.dens_d[ia,:,:,:]=self.rho_3d_dens_seg(self.grid.rhom, self.grid.phim, self.grid.zm, h, r0, gamma, self.Agrid[ia], a0, beta, self.functions_rhoz[ia], function_sigma, *par_sigma)
 
-                elif self.grid.Nth==1:# one cell
-                    self.rho_d[ia,:,:,:]=function_sigma(self.grid.rhom, self.grid.phim, *par_sigma)/(self.grid.dth[0]*self.grid.rhom) 
+                    elif self.grid.Nth==1:# one cell
+                        self.dens_d[ia,:,:,:]=function_sigma(self.grid.rhom, self.grid.phim, self.Agrid[ia], *par_sigma)/(self.grid.dth[0]*self.grid.rhom) 
 
-                
-            M_dust_temp=2.*np.sum(self.rho_d[ia,:,:,:]*(self.grid.dphim*self.grid.rhom)*(self.grid.drm)*(self.grid.dthm*self.grid.rm))*au**3.0
-            self.rho_d[ia,:,:,:]=self.rho_d[ia,:,:,:]*self.Mgrid[ia]/M_dust_temp*M_earth
+                else:
+                    # nother emisphere
+                    if self.grid.Nth>1: # more than one cell per emisphere
+                        self.dens_d[ia,:,:,:]=self.rho_3d_dens(self.grid.rhom, self.grid.phim, self.grid.zm, h, r0, gamma, self.functions_rhoz[ia], function_sigma, *par_sigma)
+
+                    elif self.grid.Nth==1:# one cell
+                        self.dens_d[ia,:,:,:]=function_sigma(self.grid.rhom, self.grid.phim, *par_sigma)/(self.grid.dth[0]*self.grid.rhom) 
+
+                    
+                M_dust_temp=2.*np.sum(self.dens_d[ia,:,:,:]*(self.grid.dphim*self.grid.rhom)*(self.grid.drm)*(self.grid.dthm*self.grid.rm))*au**3.0
+                self.dens_d[ia,:,:,:]=self.dens_d[ia,:,:,:]*self.Mgrid[ia]/M_dust_temp*M_earth
 
 
     ## dust density from X,Y,Z positions (same density for all species in current implementation)
@@ -732,7 +760,7 @@ class dust:
         assert positions is not None, "array with positions not specified"
 
         self.grid=grid
-        self.rho_d=np.zeros((self.N_species,self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # density field (only norther emisphere)
+        self.dens_d=np.zeros((self.N_species,self.grid.Nth,self.grid.Nphi,self.grid.Nr)) # density field (only norther emisphere)
 
         # thetam, phim, rm=np.meshgrid(self.grid.th, self.grid.phi, self.grid.r, indexing='ij' ) # so it goes from Northpole to equator. theta is still the angle from the equator.
         # dthm, dphim, drm = np.meshgrid(self.grid.dth, self.grid.dphi, self.grid.dr, indexing='ij' )
@@ -767,13 +795,13 @@ class dust:
 
             # nother emisphere
             if self.grid.Nth>1: # more than one cell per emisphere
-                self.rho_d[ia,:,:,:]=density
+                self.dens_d[ia,:,:,:]=density
 
             elif self.grid.Nth==1:# one cell
-                self.rho_d[ia,:,:,:]=density
+                self.dens_d[ia,:,:,:]=density
 
-            M_dust_temp=2.*np.sum(self.rho_d[ia,:,:,:]*(self.grid.dphim*self.grid.rhom)*(self.grid.drm)*(self.grid.dthm*self.grid.rm))*au**3.0
-            self.rho_d[ia,:,:,:]=self.rho_d[ia,:,:,:]*self.Mgrid[ia]/M_dust_temp*M_earth
+            M_dust_temp=2.*np.sum(self.dens_d[ia,:,:,:]*(self.grid.dphim*self.grid.rhom)*(self.grid.drm)*(self.grid.dthm*self.grid.rm))*au**3.0
+            self.dens_d[ia,:,:,:]=self.dens_d[ia,:,:,:]*self.Mgrid[ia]/M_dust_temp*M_earth
             
 
 
@@ -817,13 +845,13 @@ class dust:
                 # northern emisphere
                 for k in range(self.grid.Nth):
                     for i in range(self.grid.Nr):
-                        file_dust.write(str(self.rho_d[ia,-(1+k),j,i])+' \n')
+                        file_dust.write(str(self.dens_d[ia,-(1+k),j,i])+' \n')
 
                 if not self.grid.mirror:
                     # southern emisphere
                     for k in range(self.grid.Nth):
                         for i in range(self.grid.Nr):
-                            file_dust.write(str(self.rho_d[ia,k,j,i])+' \n')
+                            file_dust.write(str(self.dens_d[ia,k,j,i])+' \n')
         file_dust.close()
         
 
@@ -1087,6 +1115,12 @@ class physical_grid:
         self.dth=self.thedge[1:]-self.thedge[:-1]
         self.th=(self.thedge[1:]+self.thedge[:-1])/2
     
+        if self.mirror:
+            self.th_full=self.th[::-1]
+        else:
+            self.th_full=np.zeros(2*self.Nth)
+            self.th_full[0:self.Nth]=self.th[::-1]
+            self.th_full[self.Nth:]=- self.th
     
         ### Phi
 
@@ -1106,6 +1140,12 @@ class physical_grid:
         self.rhom=self.rm*np.cos(self.thetam) 
         self.zm=self.rm*np.sin(self.thetam)
         
+        # full grid including southern emisphere if mirror=False, where theta is ordered from North pole to midplane to South pole but still measrured from equator.
+        self.theta_fullm, self.phi_fullm, self.r_fullm=np.meshgrid(self.th_full, self.phi, self.r, indexing='ij' ) # Theta is ordered from North pole to midplane and South pole. Theta is still the angle from the equator.
+        self.rho_fullm=self.r_fullm*np.cos(self.theta_fullm) 
+        self.z_fullm=self.r_fullm*np.sin(self.theta_fullm)
+
+
     def save(self):
     
         path='amr_grid.inp' #'amr_grid.inp'
