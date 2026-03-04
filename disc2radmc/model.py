@@ -995,6 +995,19 @@ class star:
 
         file_star.close()
 
+    def sed(self, waves=None, dpc=1.0):
+
+        # assumes you already saved the spectrum and therefore the wavelength and flux at 1pc are stored in the object. This is useful if you want to read the spectrum at a different distance without having to recompute it.
+
+        fstar=interpolate.interp1d(self.lams, self.flux_1pc, bounds_error=False, fill_value=0.0)
+        if waves is None:
+            waves=self.lams
+        flux_dpc=fstar(waves)*(1.0/dpc)**2.
+        flux_Jy=flux_dpc*1.0e-23 # convert from erg/cm2/s/Hz to Jy
+        return flux_Jy
+        # convert flux at 1pc to flux at dpc
+
+
 class wavelength_grid:
     """
     A class used to define the wavelength grid (in um)
