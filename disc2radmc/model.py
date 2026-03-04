@@ -1003,7 +1003,7 @@ class star:
         if waves is None:
             waves=self.lams
         flux_dpc=fstar(waves)*(1.0/dpc)**2.
-        flux_Jy=flux_dpc*1.0e-23 # convert from erg/cm2/s/Hz to Jy
+        flux_Jy=flux_dpc*1.0e23 # convert from erg/cm2/s/Hz to Jy
         return flux_Jy
         # convert flux at 1pc to flux at dpc
 
