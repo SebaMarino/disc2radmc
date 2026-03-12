@@ -142,7 +142,7 @@ class simulation:
         arch=open(path,'w')
         arch.write(str(Nw)+'\n')
         for i in range(Nw):
-            arch.write('%1.5e \n'%(wavelengths[i]))
+            arch.write('{} \n'.format(wavelengths[i]))
         arch.close()
         
         if sizeau>0.0:
