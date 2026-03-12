@@ -330,8 +330,7 @@ class gas:
         # this could also be moved to a function
         if pressure_support:
 
-            # need to fix this as cs can have both emispheres and is ordered from N pole to midplane, whereas dens_g is only norther emisphere and ordered from midplane to N pole
-            #### insert fix by extending dens_g to both emispheres and reordering theta axis
+            #### extending dens_g to both emispheres and reordering theta axis
             if grid.mirror:
                 self.dens_g_full=np.zeros((self.N_species, self.grid.Nth, self.grid.Nphi, self.grid.Nr)) # density field (only N emisphere)
                 self.dens_g_full[:, : ,:,:]=self.dens_g[:,::-1,:,:] # flipped northern emisphere
