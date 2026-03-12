@@ -343,7 +343,6 @@ class gas:
             self.P=np.sum(self.dens_g_full*self.masses, axis=0)*self.cs**2. # cgs
             
             ### dP/dr = dP/dR * dR/dr + dP/dtheta * dtheta/dr (derived using r,z as a function of R, theta)
-            ### need to fix this bit to have correct array with theta values ordered as cs and P
             self.dPdr=np.gradient(self.P, self.grid.r*au, axis=2)*np.cos(self.grid.theta_fullm) - np.gradient(self.P, self.grid.th_full, axis=0)*np.sin(self.grid.theta_fullm)/(self.grid.r_fullm*au) # cgs
             
             ac = G*star.Mstar*M_sun*self.grid.rho_fullm*au**(-2)/self.grid.r_fullm**3. 
