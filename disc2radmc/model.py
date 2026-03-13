@@ -997,11 +997,11 @@ class star:
 
         # assumes you already saved the spectrum and therefore the wavelength and flux at 1pc are stored in the object. This is useful if you want to read the spectrum at a different distance without having to recompute it.
 
-        # do interpolation in logspace
-        logfstar=interpolate.interp1d(np.log10(self.lams), np.log10(self.flux_1pc), bounds_error=False, fill_value=0.0)
+        # interpolate linearly in frequency space, which is what radmc does by default
+        ffstar=interpolate.interp1d(1./self.lams), self.flux_1pc, bounds_error=False, fill_value=0.0)
         if waves is None:
             waves=self.lams
-        flux_dpc=10**logfstar(np.log10(waves))*(1.0/dpc)**2.
+        flux_dpc=ffstar(1./waves)*(1.0/dpc)**2.
         flux_Jy=flux_dpc*1.0e23 # convert from erg/cm2/s/Hz to Jy
         return flux_Jy
         # convert flux at 1pc to flux at dpc
