@@ -142,7 +142,7 @@ class simulation:
         arch=open(path,'w')
         arch.write(str(Nw)+'\n')
         for i in range(Nw):
-            arch.write('{:.13e} \n'.format(wavelengths[i]))
+            arch.write('{} \n'.format(wavelengths[i]))
         arch.close()
         
         if sizeau>0.0:
@@ -980,11 +980,11 @@ class star:
 
         ### wavelengths
         for i in range(self.Nlam):
-            file_star.write('{:.13e} \n'.format(self.lams[i]))
+            file_star.write('{} \n'.format(self.lams[i]))
         ### star
         if self.Tstar>0.0:
             for i in range(self.Nlam):
-                file_star.write('{:.13e} \n'.format(self.flux_1pc[i]))
+                file_star.write('{} \n'.format(self.flux_1pc[i]))
         else:
             file_star.write(str(self.Tstar)+'\n')
         # ### planet
