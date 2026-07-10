@@ -6,6 +6,8 @@ Disc2radmc is a python package to create debris disc models that can be fed into
 
 Install with pip as 'pip install disc2radmc'.
 
+You will also need to install [RADMC3D](https://www.ita.uni-heidelberg.de/~dullemond/software/radmc-3d/) 
+
 ## Usage
 
 See example in [docs/example_dust/Dust_model.ipynb](https://github.com/SebaMarino/disc2radmc/tree/main/docs/example_dust/Dust_model.ipynb) to know how to make images of dust and example at [docs/example_gas/Gas_model.ipynb](https://github.com/SebaMarino/disc2radmc/blob/main/docs/example_gas/Gas_model.ipynb) to make images (cubes) of gas.
