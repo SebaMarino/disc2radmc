@@ -4,7 +4,7 @@ Disc2radmc is a python package to create debris disc models that can be fed into
 
 ## Installation
 
-Install with pip as 'pip install disc2radmc'.
+You can simply install with pip as 'pip install disc2radmc', but it is recommended to clone this repository to use some of the latest features such as non-Keplerian kinematics and grain size segregation.
 
 You will also need to install [RADMC3D](https://www.ita.uni-heidelberg.de/~dullemond/software/radmc-3d/) 
 
