@@ -3,6 +3,8 @@ import os,sys
 from disc2radmc.constants import *
 from disc2radmc.functions_misc import *
 from astropy.io.votable import parse
+import matplotlib.pyplot as plt
+
 home_directory = os.path.expanduser( '~' )
 
 
@@ -164,7 +166,46 @@ class simulation:
         np.savetxt(outputfile, SED)
         return SED
 
-    
+    def plot_temperature_field(self, gridmodel, kind='dust', species=0, plot_type='phi', xlogscale=False, ylogscale=False):
+        # plot_type can be 'phi' or 'theta'
+        # check temperature (not fully tested and may fail if Nphi or Ntheta is 1)
+
+
+        # load binary file if it exists, otherwise load normal file
+        try:
+            Ts=np.fromfile(f'./{kind}_temperature.bdat', dtype=float)[4:]
+        except:
+            Ts=np.loadtxt(f'./{kind}_temperature.inp', skiprows=3)
+
+        # select right species and reshape to 3D array
+        if gridmodel.mirror: # only Ntheta cells 
+            Tsplot=Ts[species*gridmodel.Nphi*gridmodel.Nth*gridmodel.Nr:(species+1)*gridmodel.Nphi*gridmodel.Nth*gridmodel.Nr]
+            # reshape
+            Tsplot=Tsplot.reshape( (gridmodel.Nphi, gridmodel.Nth, gridmodel.Nr))
+        else: # both Ntheta and Stheta cells
+            Tsplot=Ts[species*gridmodel.Nphi*2*gridmodel.Nth*gridmodel.Nr:(species+1)*gridmodel.Nphi*2*gridmodel.Nth*gridmodel.Nr]
+            Tsplot=Tsplot.reshape( (gridmodel.Nphi, 2*gridmodel.Nth, gridmodel.Nr))
+
+        fig,ax=plt.subplots(figsize=(8,6))
+
+        if plot_type=='phi':
+            tmap=ax.pcolormesh(gridmodel.redge, gridmodel.phiedge, Tsplot[:,0,:])
+            ax.set_ylabel(r'Azimuthal angle [rad]')
+        elif plot_type=='theta':
+            # only plot northern emisphere
+            tmap=ax.pcolormesh(gridmodel.redge, gridmodel.thedge[::-1], Tsplot[:,0,:gridmodel.Nth])
+            ax.set_ylabel(r'Polar angle [rad]')    
+
+        ax.set_xlabel('Radius [au]')
+        if xlogscale:
+            ax.set_xscale('log')
+        if ylogscale:
+            ax.set_yscale('log')
+
+        # add colorbar
+        cbar=plt.colorbar(tmap, ax=ax, label='Temperature [K]')
+
+        return fig, ax
     
 class gas:
     
