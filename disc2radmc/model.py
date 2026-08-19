@@ -291,7 +291,7 @@ class gas:
 
                     self.dens_g[ia,:,:,:]=functions_sigma[ia](self.grid.rhom, self.grid.phim, *pars_sigma[ia])/(self.grid.dth[0]*self.grid.rhom) # rho_3d_dens(rho, 0.0, 0.0, hs, sigmaf, *args )
             
-                M_gas_temp=2.*np.sum(self.dens_g[ia,:,:,:]*(self.grid.dphim*self.grid.rhom)*(self.grid.drm)*(self.grid.dthm*self.grid.rm))*au**3.0
+                M_gas_temp=2.*np.sum(self.dens_g[ia,:,:,:]*self.grid.dV)*au**3.0
                 self.dens_g[ia,:,:,:]=self.dens_g[ia,:,:,:]*self.Masses[ia]/M_gas_temp*M_earth /self.masses[ia] # 1/cm3
 
         else:
@@ -785,7 +785,7 @@ class dust:
                         self.dens_d[ia,:,:,:]=function_sigma(self.grid.rhom, self.grid.phim, *par_sigma)/(self.grid.dth[0]*self.grid.rhom) 
 
                     
-                M_dust_temp=2.*np.sum(self.dens_d[ia,:,:,:]*(self.grid.dphim*self.grid.rhom)*(self.grid.drm)*(self.grid.dthm*self.grid.rm))*au**3.0
+                M_dust_temp=2.*np.sum(self.dens_d[ia,:,:,:]*self.grid.dV)*au**3.0
                 self.dens_d[ia,:,:,:]=self.dens_d[ia,:,:,:]*self.Mgrid[ia]/M_dust_temp*M_earth
 
 
@@ -793,7 +793,7 @@ class dust:
     def dust_densities_Nbody(self, grid=None, positions=None, fmt='XYZ'):
 
         # positions: [au or rad],  array with position of particles with shape (Nparticles, Ndim) 
-        
+        # for now, this does not support asymmetric emispheres, so the density is mirrored in the southern emisphere.
         
         assert grid is not None, "grid object needed to define dust density distribution"
         assert positions is not None, "array with positions not specified"
@@ -813,7 +813,7 @@ class dust:
             rhos=np.sqrt(positions[:,0]**2+positions[:,1]**2) # radius in polar coordinates
             phis=np.arctan2(positions[:,1], positions[:,0]) # from -pi to pi
             phis[phis<0.]=phis[phis<0.]+2*np.pi # from 0 to 2pi
-            thetas=np.arctan2(positions[:,2], rhos)
+            thetas=np.abs(np.arctan2(positions[:,2], rhos)) # mirrored emispheres
             pos=np.array( [thetas,phis,rs] ).T
             
         elif fmt=='THETAPHIR':
@@ -826,8 +826,9 @@ class dust:
         else:
             sys.exit('Not a valid format ')
             
-        density, edges=np.histogramdd( pos, bins=(self.grid.thedge,self.grid.phiedge,self.grid.redge), density=True)
+        density, edges=np.histogramdd( pos, bins=(self.grid.thedge,self.grid.phiedge,self.grid.redge), density=False) # ordered from N emisphere
 
+        density=density/grid.dV
         
         for ia in range(self.N_species):
             M_dust_temp= 0.0
@@ -839,7 +840,7 @@ class dust:
             elif self.grid.Nth==1:# one cell
                 self.dens_d[ia,:,:,:]=density
 
-            M_dust_temp=2.*np.sum(self.dens_d[ia,:,:,:]*(self.grid.dphim*self.grid.rhom)*(self.grid.drm)*(self.grid.dthm*self.grid.rm))*au**3.0
+            M_dust_temp=2.*np.sum(self.dens_d[ia,:,:,:]*self.grid.dV)*au**3.0
             self.dens_d[ia,:,:,:]=self.dens_d[ia,:,:,:]*self.Mgrid[ia]/M_dust_temp*M_earth
             
 
@@ -1169,12 +1170,18 @@ class physical_grid:
         self.th=(self.thedge[1:]+self.thedge[:-1])/2
     
         if self.mirror:
-            self.th_full=self.th[::-1]
+            self.th_full=self.th[::-1] # ordered from N emisphere to midplane
+            self.thedge_full=self.thedge[::-1] # ordered from N emisphere to midplane
         else:
-            self.th_full=np.zeros(2*self.Nth)
-            self.th_full[0:self.Nth]=self.th[::-1]
-            self.th_full[self.Nth:]=- self.th
-    
+            self.th_full=np.zeros(2*self.Nth) # ordered from N emisphere to midplane
+            self.th_full[0:self.Nth]=self.th[::-1] # ordered from N emisphere to midplane
+            self.th_full[self.Nth:]=- self.th # ordered from N emisphere to midplane
+            self.thedge_full=np.zeros(2*self.Nth+1) # ordered from N emisphere to midplane
+            self.thedge_full[0:self.Nth+1]=self.thedge[::-1] # ordered from N emisphere to midplane
+            self.thedge_full[self.Nth+1:]=-self.thedge[1:] # ordered from N emisphere to midplane
+
+        self.dth_full=np.abs(self.th_full[1:]-self.th_full[:-1])
+
         ### Phi
 
         # ### linear sampling in phi
@@ -1198,6 +1205,11 @@ class physical_grid:
         self.rho_fullm=self.r_fullm*np.cos(self.theta_fullm) 
         self.z_fullm=self.r_fullm*np.sin(self.theta_fullm)
 
+        self.dtheta_fullm, self.dphi_fullm, self.dr_fullm = np.meshgrid(self.dth_full, self.dphi, self.dr, indexing='ij' )
+
+        # cell volumes
+        self.dV=self.drm * self.rm * self.dphim * self.rhom * self.dthm # ordered from midplane to North pole. Theta is still the angle from the equator.
+        self.dV_full=self.dr_fullm * self.r_fullm * self.dphi_fullm * self.rho_fullm * self.dtheta_fullm # ordered from North pole to midplane to South pole. Theta is still the angle from the equator.
 
     def save(self):
     
