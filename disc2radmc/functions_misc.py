@@ -346,7 +346,7 @@ def Convolve_beam(path_image, BMAJ, BMIN, BPA, tag_out=''):
 
     sigx=BMIN*3600.0*1000.0/(2.0*np.sqrt(2.0*np.log(2.0))) 
     sigy=BMAJ*3600.0*1000.0/(2.0*np.sqrt(2.0*np.log(2.0)))  
-    theta=BPA*np.pi/180.0   #np.pi/4.0
+    theta=-BPA*np.pi/180.0   #np.pi/4.0
 
     # Fout1=interpol(N,M,ps1,ps2,Fin1,sigx,sigy,theta)
 
