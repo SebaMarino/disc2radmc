@@ -1180,7 +1180,7 @@ class physical_grid:
             self.thedge_full[0:self.Nth+1]=self.thedge[::-1] # ordered from N emisphere to midplane
             self.thedge_full[self.Nth+1:]=-self.thedge[1:] # ordered from N emisphere to midplane
 
-        self.dth_full=np.abs(self.th_full[1:]-self.th_full[:-1])
+        self.dth_full=np.abs(self.thedge_full[1:]-self.thedge_full[:-1])
 
         ### Phi
 
